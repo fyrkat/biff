@@ -1,0 +1,139 @@
+#!/bin/sh
+
+# $Id: Checkin-and-Reload,v 1.6 2014/01/29 13:06:06 he Exp $
+
+
+files="$@"
+
+: -- Ensure the right named-checkzone is used:
+export PATH=/usr/sbin:/bin:/usr/bin
+
+:
+: -- First check that zones are OK
+:
+ok=true
+msg=""
+failzones=""
+okzones=""
+okfiles=""
+err=0
+
+checkflags="-i full -k fail -m fail -M fail -n fail -S fail"
+
+for f in ${files}; do
+	z=${f}
+	: -- if only digits and full-stop
+	: -- we have the local convention that it is
+	: -- an in-addr.arpa zone
+	if expr ${z} : '^[-0-9.]*$' > /dev/null; then
+	   z="${z}.in-addr.arpa"
+	fi
+	echo named-checkzone ${checkflags} ${z} ${f}
+	if ! named-checkzone ${checkflags} ${z} ${f}; then
+		ok=false
+		err=$(($err + 1))
+		failzones="${failzones} ${z}"
+		msg="WARNING: one or more zone files failed syntax checking"
+	else
+		okzones="${okzones} ${z}"
+		okfiles="${okfiles} ${f}"
+	fi
+done
+
+n=0
+for f in $okfiles; do
+	n=$(($n + 1))
+done
+
+if ! ${ok}; then
+	echo "${msg}" >&2
+	echo "WARNING: Failed zones: ${failzones}" >&2
+	if [ $n = 0 ]; then
+		echo "ERROR: No remaining OK zones, exiting" >&2
+		exit 1
+	else
+		echo "NOTICE: Continuing with validated zones" >&2
+	fi
+fi
+
+:
+: -- Check which files we can lock, skip the ones we cannot lock:
+:
+
+lockedfiles=""
+failedfiles=""
+ok=true
+
+for f in ${okfiles}; do
+	echo rcs -l ${f}
+	if ! rcs -l ${f} </dev/null; then
+		echo "WARNING: failed to acquire lock" >&2
+		ok=false
+		err=$(($err + 1))
+		failedfiles="${failedfiles} ${f}"
+	else
+		lockedfiles="${lockedfiles} ${f}"
+	fi
+done
+
+n=0
+for f in $lockedfiles; do
+	n=$(($n + 1))
+done
+
+if ! ${ok}; then
+	msg="WARNING: failed to acquire lock on ${failedfiles}"
+	echo "${msg}" >&2
+	if [ $n = 0 ]; then
+		echo "ERROR: no remaining OK files, exiting" >&2
+		exit 2
+	else
+		echo "NOTICE: Continuing with validated & locked zones" >&2
+	fi
+fi
+
+
+
+if [ ! "${lockedfiles}" = '' ]; then
+	: -- Avoid warnings from perl on non-default LANG settings
+	: -- by overriding the LANG setting:
+	echo env LANG=C ./Fixserial $lockedfiles
+	env LANG=C ./Fixserial $lockedfiles
+
+	echo ci -u -f -m"Empty" $lockedfiles </dev/null
+	ci -u -f -m"Empty" $lockedfiles </dev/null
+fi
+
+:
+: Get the zone names again:
+:
+zones=""
+for f in $lockedfiles; do
+	z=$f
+	if expr ${z} : '^[-0-9.]*$' > /dev/null; then
+		z="${z}.in-addr.arpa"
+	fi
+	zones="${zones} $z"
+done
+
+failedreload=""
+for z in $zones; do
+	echo rndc reload ${z}
+	if ! rndc reload ${z}; then
+		err=$(($err + 1))
+		failedreload="$z $failedreload"
+	fi
+done
+if [ $err != 0 ]; then
+	echo "WARNING: Some files failed validation or locking, exiting" >&2
+	if [ "$failzones" != "" ]; then
+		echo "WARNING: zones failing syntax check: $failzones" >&2
+	fi
+	if [ "$failedfiles" != "" ]; then
+		echo "WARNING: failed to get lock for: $failedfiles" >&2
+	fi
+	if [ "$failedreload" != "" ]; then
+		echo "WARNING: failed to reload zones: $failedreload" >&2
+	fi
+fi
+exit $err

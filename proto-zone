@@ -1,0 +1,17 @@
+;
+; $Id: proto-zone,v 1.5 2016/05/07 22:55:34 jornane Exp $
+;
+
+$ORIGIN DOMAIN
+$TTL 86400
+@	3600	IN	SOA	biff.fyrkat.no. hostmaster.fyrkat.no. (
+				2007010100	; Serialnumber
+				28800		; Refresh, 8 hrs
+				3600		; Retry, 1 hr
+				1814400		; Expire, 3 weeks
+				86400 )		; "Minimum", TTL for negative caching
+; Name servers:
+			NS	biff.fyrkat.no.
+			NS
+;
+; Domain data:

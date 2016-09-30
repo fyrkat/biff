@@ -1,0 +1,23 @@
+#! /bin/sh
+
+# $Id: Reload-zones,v 1.1 2015/05/19 08:53:40 he Exp $
+
+zones="$@"
+
+: -- Ensure the right rndc is used:
+export PATH=/usr/sbin:/bin:/usr/bin
+
+failedreload=""
+err=0
+
+for z in $zones; do
+	echo rndc reload ${z}
+	if ! rndc reload ${z}; then
+		err=$(($err + 1))
+		failedreload="$z $failedreload"
+	fi
+done
+if [ $err != 0 ]; then
+	echo "WARNING: failed to reload zones: $failedreload" >&2
+fi
+exit $err

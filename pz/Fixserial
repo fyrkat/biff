@@ -1,0 +1,58 @@
+#! /usr/pkg/bin/perl
+#
+# Dette programmet tar som argument en rekke filer, og fikser
+# serienummeret i dem (hvis det st}r "Serialnumber" etter serienummeret).
+# Programmet bruker en fil som heter serialnumber til } huske det siste
+# nummeret som ble brukt.
+#
+# Programmet er satt sammen av Jens@ifi.uio.no, noe er skrevet av
+# Anders@ifi.uio.no, litt er hentet fra kamelboka.
+#
+
+open(SNO, "<serialnumber") || warn "Failed to read serialnumber: $!";
+$oserno = <SNO>;
+close(SNO);
+
+($sec, $min, $hour, $day, $mon, $year) = localtime (time);
+$year += $year > 90 ? 1900 : 2000;
+$mon++;
+
+$serno = (($year*100 + $mon)*100 + $day)*100;
+$serno = $oserno + 1 if ($serno <= $oserno);
+
+$| = 1;
+
+print "Fixing...\n";
+FILE: foreach $f (@ARGV) {
+	open(IN, $f) ||
+		((warn "Failed to read $f: $!\n"), next FILE);
+	$was_ro = ! -w $f;
+	printf "%-30s ", $f;
+	rename($f, "$f.bak") ||
+		((warn "Can't modify $f: $!\n"), next FILE);
+	open(OUT, ">$f") ||
+		die "Can't create new $f: $!\n";
+	while (<IN>) {
+		if (/\;.*(s|S)eri(a|e).*/) {
+			$_ =~ s/( *)20[0-9][0-9][0-1][0-9][0-3][0-9][0-9][0-9](.*\;.*)/\1$serno\2/;
+			print OUT "$_";
+			next;
+		}
+		print OUT;
+	}
+	close IN;
+	close OUT;
+
+	if ( $was_ro ) {
+		chmod 0444, $f;
+	}
+	unlink("$f.bak");
+	printf "%s\n", $serno;
+}
+
+# Sikkert lurt med en sleep her for at Makefile skal bli glad.
+# Hvis man for eksempel bruker programmet sammen med en Makefile.
+sleep(1);
+open(SNO, ">serialnumber") || die("Cant write serialnumber: $!");
+print SNO "$serno\n";
+close (SNO);

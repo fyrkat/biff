@@ -1,0 +1,68 @@
+options {
+	directory "/etc/namedb";	// after chroot
+	listen-on { 0.0.0.0; }; // change, or set to none
+	listen-on-v6 { ::; }; // change, or set to none
+	files 1024;
+	allow-transfer {
+		localnets;
+
+		// put IP addresses here of your slave servers.
+	};
+	recursion no;
+	// Some DDoS preventive measures:
+	minimal-responses yes;
+	rate-limit {
+		responses-per-second 25;
+		window 15;
+		slip 5;
+		min-table-size 10000;
+	};
+};
+
+controls {
+	inet 127.0.0.1 port 953 allow { 127.0.0.1; };
+};
+
+statistics-channels {
+	inet 127.0.0.1 port 8053 allow { 127.0.0.1; };
+};
+
+logging {
+	// This is done to direct normal output to local2 instead of daemon
+	channel normal {
+		syslog local2;
+		severity dynamic;
+	};
+
+	// This is done to get rid of lame server and cname warnings
+	channel trash {
+		syslog local3;
+		severity dynamic;
+	};
+
+	// This is done to get "unapproved recursion" etc. separate
+	channel security {
+		syslog local4;
+		severity dynamic;
+	};
+
+	category default { normal; default_debug; };
+	category general { normal; default_debug; };
+	category config { normal; default_debug; };
+	category network { normal; default_debug; };
+	category notify { normal; default_debug; };
+	category xfer-in { normal; default_debug; };
+	category xfer-out { normal; default_debug; };
+	category dnssec { security; };
+	category security { security; };
+	category database { trash; };
+	category lame-servers { trash; };
+	category update-security { trash; };
+	category update { trash; };
+	category resolver { trash; };
+};
+
+zone "." {
+	type hint;
+	file "named.hints";
+};
